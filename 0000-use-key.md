@@ -4,13 +4,13 @@
 
 # Summary
 
-React has a special prop called `key` that is used to distinguish between rendered instances of a component within the same parent. It's essential for mapping a data array to a component array.
+React has a special prop called `key` used to distinguish between rendered instances of a component within the same parent. It's essential for mapping a data array to a component array.
 
-The `key` prop also has an application outside of mapped components. It can be used to force a component to re-render by changing the `key` prop value. This is useful when you want to reset the state of a component or trigger a re-render without changing the component's props.
+The `key` prop also has an application outside of mapped components. Parents can use it to force a component to re-render by changing the `key` prop value. This is useful when you want to reset the state of a component or trigger a re-render without changing the component's props.
 
 This technique is described in [You Might Not Need an Effect](https://react.dev/learn/you-might-not-need-an-effect#resetting-all-state-when-a-prop-changes).
 
-However, writing code where the parent is responsible for the state reset is somewhat of a "tail wagging the dog" situation, as often the component itself is the one that knows best when it needs to reset its state. This RFC proposes to allow components to use the `key` prop behavior in a more flexible way, enabling them to control their own re-rendering behavior.
+However, writing code where the parent is responsible for the state reset is somewhat of a "tail wagging the dog" situation, as often the component itself is the one that knows best when it needs to reset its state. This RFC proposes allowing components to use the `key` prop behavior in a more flexibly, enabling them to control their own re-rendering behavior by introducing a new hook called `useKey`.
 
 # Basic example
 
@@ -61,9 +61,9 @@ export default function ProfilePage({ userId }) {
 
 # Motivation
 
-A component should be able to control its own re-rendering behavior, especially when it comes to resetting its state. The current pattern of using the `key` prop requires the parent component to manage this behavior. This leads to the same components internal state behaving differently depending on whether the parent has passed a `key` prop or not, which can be confusing and error-prone.
+A component should be able to control its own re-rendering behavior, especially when it comes to resetting its state. The current pattern of using the `key` prop requires the parent component to manage this behavior. This leads to the same components' internal state behaving differently depending on whether the parent has passed a `key` prop or not, which can be confusing and error-prone.
 
-A component should be able to identify whether it is a new instance of itself or not. This will help developers of higher-level components avoid thinking of the inner-workings of the lower-level components.
+A component should be able to identify whether it is a new instance of itself or not. This will help developers of higher-level components avoid thinking about the inner workings of the lower-level components.
 
 # Detailed design
 
@@ -75,11 +75,11 @@ The signature of the hook would be:
 void useKey(value: React.Key);
 ```
 
-> Note that unlike the `key` prop, `useKey` does not accept `null` or `undefined`. This is because in compound key situations, both values would be serialized to the same representation as an empty string, which could lead to surprising behavior. It is preferred for the caller to coalesce null or undefined values to a string representation before passing them to `useKey`.
+> Note that, unlike the `key` prop, `useKey` does not accept `null` or `undefined`. This is because, in compound key situations, `useKey` would serialize both values to the same representation as an empty string, which could lead to surprising behavior. It is preferred for the caller to coalesce null or undefined values to a string representation before passing them to `useKey`.
 
 The `useKey` hook would work similarly to the `key` prop, but it would be used within the component itself. When the value passed to `useKey` changes, the component will be treated as a new instance, and its state will be reset.
 
-`useKey` would be able to combine itself with the `key` prop, allowing for more complex scenarios where both the parent and the component can control the re-rendering behavior, by generating a compound key.
+`useKey` would be able to combine itself with the `key` prop, allowing for more complex scenarios where both the parent and the component can control the re-rendering behavior by generating a compound key.
 
 For instance, if a component uses `useKey("bar")` and the parent passes `key="foo"`, the component's effective key would be `"foo-bar"`.
 
@@ -96,7 +96,7 @@ export default function ProfilePage({ userId, organizationId, projectId }) {
 }
 ```
 
-Given that React's reconcilation algorithm expects to have a determined `key` _before_ processing the body of a component, the `useKey` hook would need to be called at the top level of the component, before any other hooks. This would ensure that the component's identity is established before any state or effects are initialized.
+Given that React's reconciliation algorithm expects to have a determined `key` _before_ processing the body of a component, the `useKey` hook would need to be called at the top level of the component, before any other hooks. This would ensure that the component's identity is established before any state or effects are initialized.
 
 This is particularly important to avoid `useKey` consuming dynamic values that could change during the component's lifecycle such as state or suspense hooks.
 
@@ -147,7 +147,7 @@ I don't like this approach because:
 
 # Adoption strategy
 
-Not a breaking change for most applications. Some libraries that lean on APIs like [`cloneElement`](https://react.dev/reference/react/cloneElement) and may encounter unexpected behaviors if they attempt to own the `key` prop themselves.
+It is not a breaking change for most applications. Some libraries that lean on APIs like [`cloneElement`](https://react.dev/reference/react/cloneElement) and may encounter unexpected behaviors if they attempt to own the `key` prop themselves.
 
 Such libraries will need to identify if the `useKey` hook is a breaking change for them. Those cases should be rare.
 
@@ -159,6 +159,7 @@ This hook recycles the same principles as the `key` prop, so it should be easy t
 
 # Unresolved questions
 
-- Is this possible to implement within the reconcilation algorithm?
+- Is this possible to implement within the reconciliation algorithm?
 - In what cases might this be a breaking change?
 - Are there any cases where not calling `useKey` at the top level of the component would be appropriate?
+- Should `useKey` be preferred to the `key` prop in all cases, or are there scenarios where the `key` prop is still the better option?
